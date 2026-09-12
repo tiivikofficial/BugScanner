@@ -1,8 +1,9 @@
 """Safe proof-of-concept generation for authorized vulnerability reporting.
 
 This module produces non-destructive, human-reviewable reproduction material from
-findings that already exist in the current scan. It does not execute exploits,
-perform credential theft, bypass controls, access cloud metadata, or expand scope.
+findings that already exist in the current scan. It never executes exploits,
+performs credential theft, bypasses controls, accesses cloud metadata/internal
+services, or expands scope.
 """
 
 from __future__ import annotations
@@ -31,72 +32,88 @@ class PoCEngine:
         if not parameter:
             return url
         parts = urlsplit(url)
-        pairs = []
+        pairs: list[tuple[str, str]] = []
         for item in parts.query.split("&") if parts.query else []:
             if "=" in item:
-                key, _ = item.split("=", 1)
-                pairs.append((key, value if key == parameter else _))
-            elif item == parameter:
-                pairs.append((item, value))
+                key, original = item.split("=", 1)
+                pairs.append((key, value if key == parameter else original))
+            elif item:
+                pairs.append((item, value if item == parameter else ""))
         if not any(key == parameter for key, _ in pairs):
             pairs.append((parameter, value))
-        query = "&".join(f"{quote(k, safe='')}={quote(v, safe='') }" for k, v in pairs)
+        query = "&".join(
+            f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in pairs
+        )
         return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
 
     @classmethod
     def generate(cls, finding: Vulnerability) -> PoC:
-        """Return a non-destructive reproduction recipe for a finding."""
         kind = finding.vuln_type.strip().lower()
         url = finding.url
         marker = cls._SAFE_MARKER
 
         if kind in {"xss", "cross-site scripting"}:
             probe = cls._url_with_parameter(url, finding.parameter, marker)
-            steps = (
-                "Replay the request against the authorized target.",
-                f"Use the benign marker {marker} in the reported parameter.",
-                "Confirm reflection/context using the response body or DOM; do not execute active script.",
+            return PoC(
+                "XSS reflection PoC",
+                ("Replay the request against the authorized target.",
+                 f"Use the benign marker {marker} in the reported parameter.",
+                 "Confirm reflection/context using the response body or DOM; do not execute active script."),
+                f'curl -sk -i "{probe}"',
             )
-            return PoC("XSS reflection PoC", steps, f'curl -sk -i "{probe}"')
-
         if kind in {"sqli", "sql injection"}:
             probe = cls._url_with_parameter(url, finding.parameter, marker)
-            steps = (
-                "Replay the baseline request.",
-                f"Replace only the reported parameter with the benign marker {marker}.",
-                "Compare status, response size, and application error behavior; do not run destructive SQL.",
+            return PoC(
+                "SQL injection verification PoC",
+                ("Replay the baseline request.",
+                 f"Replace only the reported parameter with the benign marker {marker}.",
+                 "Compare status, response size, and application error behavior; do not run destructive SQL."),
+                f'curl -sk -i "{probe}"',
             )
-            return PoC("SQL injection verification PoC", steps, f'curl -sk -i "{probe}"')
-
         if kind == "ssrf":
-            steps = (
-                "Replay the reported request only on an approved test endpoint.",
-                "Use a collaborator or organization-controlled callback URL for confirmation.",
-                "Confirm the callback event and stop; do not request cloud metadata or internal services.",
+            return PoC(
+                "SSRF callback PoC",
+                ("Replay the reported request only on an approved test endpoint.",
+                 "Use a collaborator or organization-controlled callback URL for confirmation.",
+                 "Confirm the callback event and stop; do not request cloud metadata or internal services."),
+                f'curl -sk -i "{url}"',
             )
-            return PoC("SSRF callback PoC", steps, f'curl -sk -i "{url}"')
-
         if kind == "idor":
-            steps = (
-                "Replay the request with the original authorized test identity.",
-                "Change only the reported object identifier to another test-owned identifier.",
-                "Confirm whether authorization changes while keeping both objects inside the approved test dataset.",
+            return PoC(
+                "IDOR authorization PoC",
+                ("Replay the request with the original authorized test identity.",
+                 "Change only the reported object identifier to another test-owned identifier.",
+                 "Confirm whether authorization changes while keeping both objects inside the approved test dataset."),
+                f'curl -sk -i "{url}"',
             )
-            return PoC("IDOR authorization PoC", steps, f'curl -sk -i "{url}"')
-
         return PoC(
             f"{finding.vuln_type} reproduction PoC",
-            ("Replay the reported request against the authorized target.", "Compare the observed evidence with the finding."),
+            ("Replay the reported request against the authorized target.",
+             "Compare the observed evidence with the finding."),
             f'curl -sk -i "{url}"',
         )
 
+    @staticmethod
+    def _exploitability(finding: Vulnerability) -> tuple[str, str]:
+        confidence = finding.confidence
+        if confidence >= 0.90:
+            state = "verified"
+        elif confidence >= 0.50:
+            state = "reproducible"
+        else:
+            state = "not-reproducible"
+        impact = "confirmed" if finding.exploitation.strip() else "unconfirmed"
+        return state, impact
+
     @classmethod
     def enrich(cls, findings: list[Vulnerability]) -> list[Vulnerability]:
-        """Attach reproducible PoC text without issuing any network requests."""
+        """Attach safe PoCs and explicit exploitability state without network I/O."""
         for finding in findings:
             poc = cls.generate(finding)
             if not finding.curl_poc:
                 finding.curl_poc = poc.curl
             if not finding.exploitation:
                 finding.exploitation = "\n".join((poc.title, *poc.steps, f"Safety: {poc.safety}"))
+            finding.poc_available = True
+            finding.exploitability, finding.impact_status = cls._exploitability(finding)
         return findings
