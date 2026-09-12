@@ -319,6 +319,7 @@ class BugScanner:
                     "redirect": redirect,
                     "idor": idor,
                     "disclosure": disc_sc,
+                    "jwt": jwt,
                 }
 
                 console.print("\n[bold cyan]🔁 Adaptive endpoint scan...[/bold cyan]")
