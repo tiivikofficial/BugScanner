@@ -7,6 +7,8 @@ from enum import Enum
 from datetime import datetime
 from typing import Optional
 
+from core.asset_inventory import Asset
+
 
 class Severity(Enum):
     CRITICAL = "critical"
@@ -64,20 +66,20 @@ def calculate_severity(cvss_score: float) -> Severity:
 
 @dataclass
 class Vulnerability:
-    vuln_type: str                          # "XSS", "SQLi", "CORS", vs.
-    url: str                                # Tapıldığı URL
+    vuln_type: str
+    url: str
     severity: Severity
     cvss_score: float
     title: str
     description: str
-    evidence: str                           # Nə gördük (response snippet)
-    exploitation: str                       # Necə istismar etmək olar
-    remediation: str                        # Necə düzəltmək olar
-    parameter: Optional[str] = None         # Hansı parameter
+    evidence: str
+    exploitation: str
+    remediation: str
+    parameter: Optional[str] = None
     method: Optional[str] = "GET"
-    payload_used: Optional[str] = None      # Hansı payload işlədi
-    curl_poc: Optional[str] = None          # curl PoC command
-    cwe_id: Optional[str] = None            # CWE-79, CWE-89, vs.
+    payload_used: Optional[str] = None
+    curl_poc: Optional[str] = None
+    cwe_id: Optional[str] = None
     references: list[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=datetime.now)
 
@@ -105,9 +107,9 @@ class Vulnerability:
 @dataclass
 class PortInfo:
     port: int
-    protocol: str           # tcp/udp
-    state: str              # open/closed/filtered
-    service: str            # http, ssh, mysql, vs.
+    protocol: str
+    state: str
+    service: str
     version: Optional[str] = None
     banner: Optional[str] = None
     vulnerabilities: list[Vulnerability] = field(default_factory=list)
@@ -117,7 +119,7 @@ class PortInfo:
 class SubdomainInfo:
     subdomain: str
     ip: Optional[str] = None
-    status: Optional[int] = None        # HTTP status
+    status: Optional[int] = None
     technologies: list[str] = field(default_factory=list)
     open_ports: list[PortInfo] = field(default_factory=list)
     vulnerabilities: list[Vulnerability] = field(default_factory=list)
@@ -129,6 +131,10 @@ class ScanResult:
     start_time: datetime = field(default_factory=datetime.now)
     end_time: Optional[datetime] = None
 
+    # Normalized assets collected from scan results. This is reporting data;
+    # it does not authorize or expand network scope.
+    assets: list[Asset] = field(default_factory=list)
+
     # Recon nəticələri
     subdomains: list[SubdomainInfo] = field(default_factory=list)
     technologies: list[str] = field(default_factory=list)
@@ -138,7 +144,6 @@ class ScanResult:
     # Vulnerability nəticələri
     vulnerabilities: list[Vulnerability] = field(default_factory=list)
 
-    # Statistika
     @property
     def vuln_count_by_severity(self) -> dict:
         counts = {s.value: 0 for s in Severity}
@@ -162,6 +167,7 @@ class ScanResult:
             "start_time": self.start_time.isoformat(),
             "end_time": self.end_time.isoformat() if self.end_time else None,
             "summary": {
+                "assets_found": len(self.assets),
                 "subdomains_found": len(self.subdomains),
                 "open_ports": len(self.open_ports),
                 "endpoints_found": len(self.endpoints),
@@ -169,6 +175,16 @@ class ScanResult:
                 "by_severity": self.vuln_count_by_severity,
                 "risk_score": self.risk_score,
             },
+            "assets": [
+                {
+                    "key": asset.key,
+                    "value": asset.value,
+                    "type": asset.asset_type.value,
+                    "sources": list(asset.sources),
+                    "metadata": dict(asset.metadata),
+                }
+                for asset in self.assets
+            ],
             "technologies": self.technologies,
             "subdomains": [
                 {
