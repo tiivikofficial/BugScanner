@@ -1,6 +1,12 @@
-"""Single auditable post-processing pipeline for scanner findings."""
+"""Single auditable post-processing pipeline for scanner findings.
+
+The pipeline is offline: it processes evidence already collected by scanner
+modules and never expands scope or executes exploits.
+"""
 
 from __future__ import annotations
+
+from collections import Counter
 
 from core.finding_deduplicator import FindingDeduplicator
 from core.poc_engine import PoCEngine
@@ -17,17 +23,20 @@ class FindingPipeline:
         before = len(findings)
         findings = FindingDeduplicator.deduplicate(findings)
         duplicates = before - len(findings)
+
         findings = PoCEngine.enrich(findings)
         findings = VerificationEngine.enrich(findings)
+        findings = PoCEngine.enrich(findings)
         findings = RiskPrioritizer.prioritize(findings)
-        verification = {}
-        for finding in findings:
-            verification[finding.verification_status] = verification.get(finding.verification_status, 0) + 1
+
         return findings, {
             "input_findings": before,
             "duplicates_filtered": duplicates,
             "final_findings": len(findings),
             "poc_available": sum(1 for f in findings if f.poc_available),
-            "verification": verification,
-            "priority": {p: sum(1 for f in findings if f.risk_priority == p) for p in ("P0", "P1", "P2", "P3")},
+            "verification": dict(Counter(f.verification_status for f in findings)),
+            "exploitability": dict(Counter(f.exploitability for f in findings)),
+            "impact": dict(Counter(f.impact_status for f in findings)),
+            "priority": dict(Counter(f.risk_priority for f in findings)),
+            "severity": dict(Counter(f.severity.value for f in findings)),
         }
