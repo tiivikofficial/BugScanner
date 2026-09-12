@@ -1,5 +1,6 @@
 from core.finding_pipeline import FindingPipeline
 from core.models import Severity, Vulnerability
+from core.poc_engine import PoCEngine
 
 
 def make_finding(kind="xss"):
@@ -19,7 +20,7 @@ def make_finding(kind="xss"):
     )
 
 
-def test_pipeline_adds_poc_without_claiming_reproduction():
+def test_pipeline_adds_safe_poc_without_claiming_reproduction():
     findings, manifest = FindingPipeline.process([make_finding()])
     assert len(findings) == 1
     finding = findings[0]
@@ -27,6 +28,8 @@ def test_pipeline_adds_poc_without_claiming_reproduction():
     assert finding.poc_status == "generated"
     assert finding.curl_poc
     assert "poc-reproduced" not in finding.evidence
+    assert finding.verification_observed is False
+    assert "verification guidance" not in finding.curl_poc.lower()
     assert finding.impact_status == "unconfirmed"
     assert finding.source_modules == ["xss"]
     assert finding.verification_status in {"medium-confidence", "high-confidence", "verified"}
@@ -46,3 +49,14 @@ def test_pipeline_filters_duplicates_and_merges_sources():
     assert len(findings) == 1
     assert manifest["duplicates_filtered"] == 1
     assert findings[0].source_modules == ["xss", "nuclei"]
+
+
+def test_unverified_finding_does_not_get_a_poc():
+    finding = make_finding()
+    finding.verification_status = "unverified"
+    finding.evidence = ""
+    findings = PoCEngine.enrich([finding])
+    assert findings[0].poc_available is False
+    assert findings[0].poc_status == "not-generated"
+    assert findings[0].curl_poc is None
+    assert findings[0].verification_observed is False
