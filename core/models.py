@@ -21,10 +21,10 @@ class Severity(Enum):
     def score_range(self) -> tuple:
         ranges = {
             "critical": (9.0, 10.0),
-            "high":     (7.0, 8.9),
-            "medium":   (4.0, 6.9),
-            "low":      (1.0, 3.9),
-            "info":     (0.0, 0.9),
+            "high": (7.0, 8.9),
+            "medium": (4.0, 6.9),
+            "low": (1.0, 3.9),
+            "info": (0.0, 0.9),
         }
         return ranges[self.value]
 
@@ -32,10 +32,10 @@ class Severity(Enum):
     def color(self) -> str:
         colors = {
             "critical": "red",
-            "high":     "orange3",
-            "medium":   "yellow",
-            "low":      "blue",
-            "info":     "dim",
+            "high": "orange3",
+            "medium": "yellow",
+            "low": "blue",
+            "info": "dim",
         }
         return colors[self.value]
 
@@ -43,10 +43,10 @@ class Severity(Enum):
     def emoji(self) -> str:
         emojis = {
             "critical": "🔴",
-            "high":     "🟠",
-            "medium":   "🟡",
-            "low":      "🔵",
-            "info":     "⚪",
+            "high": "🟠",
+            "medium": "🟡",
+            "low": "🔵",
+            "info": "⚪",
         }
         return emojis[self.value]
 
@@ -54,14 +54,13 @@ class Severity(Enum):
 def calculate_severity(cvss_score: float) -> Severity:
     if cvss_score >= 9.0:
         return Severity.CRITICAL
-    elif cvss_score >= 7.0:
+    if cvss_score >= 7.0:
         return Severity.HIGH
-    elif cvss_score >= 4.0:
+    if cvss_score >= 4.0:
         return Severity.MEDIUM
-    elif cvss_score >= 1.0:
+    if cvss_score >= 1.0:
         return Severity.LOW
-    else:
-        return Severity.INFO
+    return Severity.INFO
 
 
 @dataclass
@@ -130,19 +129,13 @@ class ScanResult:
     target: str
     start_time: datetime = field(default_factory=datetime.now)
     end_time: Optional[datetime] = None
-
-    # Normalized assets collected from scan results. This is reporting data;
-    # it does not authorize or expand network scope.
     assets: list[Asset] = field(default_factory=list)
-
-    # Recon nəticələri
     subdomains: list[SubdomainInfo] = field(default_factory=list)
     technologies: list[str] = field(default_factory=list)
     open_ports: list[PortInfo] = field(default_factory=list)
     endpoints: list[str] = field(default_factory=list)
-
-    # Vulnerability nəticələri
     vulnerabilities: list[Vulnerability] = field(default_factory=list)
+    duplicates_filtered: int = 0
 
     @property
     def vuln_count_by_severity(self) -> dict:
@@ -153,7 +146,6 @@ class ScanResult:
 
     @property
     def risk_score(self) -> float:
-        """Ümumi risk skoru — weighted average"""
         if not self.vulnerabilities:
             return 0.0
         weights = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
@@ -172,6 +164,7 @@ class ScanResult:
                 "open_ports": len(self.open_ports),
                 "endpoints_found": len(self.endpoints),
                 "total_vulnerabilities": len(self.vulnerabilities),
+                "duplicates_filtered": self.duplicates_filtered,
                 "by_severity": self.vuln_count_by_severity,
                 "risk_score": self.risk_score,
             },
