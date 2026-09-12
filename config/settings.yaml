@@ -1,3 +1,7 @@
+scope:
+  allowed_targets: []
+  include_subdomains: false
+
 rate_limiting:
   default_rps: 10
   min_rps: 1
