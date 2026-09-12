@@ -1,10 +1,14 @@
-"""
-Async HTTP Client — Authentication + Rate Limiter
-"""
+"""Async HTTP client with authentication and server-friendly throttling."""
+
+from __future__ import annotations
+
+from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone
+from typing import Optional
 
 import httpx
 import tldextract
-from typing import Optional
+
 from .rate_limiter import AdaptiveRateLimiter
 
 
@@ -13,7 +17,7 @@ class HttpClient:
         self,
         rate_limiter: AdaptiveRateLimiter,
         timeout: int = 10,
-        verify_ssl: bool = False,
+        verify_ssl: bool = True,
         user_agent: str = None,
         max_redirects: int = 5,
         cookies: dict = None,
@@ -23,7 +27,7 @@ class HttpClient:
         self.rate_limiter = rate_limiter
         self.timeout = timeout
         self.verify_ssl = verify_ssl
-        self.user_agent = user_agent or "Mozilla/5.0 (compatible; BugScanner/1.0)"
+        self.user_agent = user_agent or "BugScanner/2.1"
         self.max_redirects = max_redirects
         self.extra_cookies = cookies or {}
         self.extra_headers = headers or {}
@@ -33,7 +37,6 @@ class HttpClient:
     async def __aenter__(self):
         base_headers = {"User-Agent": self.user_agent}
         base_headers.update(self.extra_headers)
-
         self._client = httpx.AsyncClient(
             verify=self.verify_ssl,
             timeout=self.timeout,
@@ -53,12 +56,36 @@ class HttpClient:
         extracted = tldextract.extract(url)
         return f"{extracted.domain}.{extracted.suffix}"
 
+    @staticmethod
+    def _retry_after(response: httpx.Response) -> float | None:
+        """Parse Retry-After as seconds or an HTTP date."""
+        value = response.headers.get("Retry-After")
+        if not value:
+            return None
+        try:
+            return max(0.0, float(value))
+        except ValueError:
+            try:
+                when = parsedate_to_datetime(value)
+                if when.tzinfo is None:
+                    when = when.replace(tzinfo=timezone.utc)
+                return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
+            except (TypeError, ValueError, OverflowError):
+                return None
+
+    def _record_response(self, domain: str, response: httpx.Response) -> None:
+        self.rate_limiter.on_response(
+            domain,
+            response.status_code,
+            retry_after=self._retry_after(response),
+        )
+
     async def get(self, url: str, **kwargs) -> Optional[httpx.Response]:
         domain = self._extract_domain(url)
         await self.rate_limiter.acquire(domain)
         try:
             response = await self._client.get(url, **kwargs)
-            self.rate_limiter.on_response(domain, response.status_code)
+            self._record_response(domain, response)
             return response
         except (httpx.TimeoutException, httpx.ConnectError, httpx.RequestError):
             return None
@@ -68,7 +95,7 @@ class HttpClient:
         await self.rate_limiter.acquire(domain)
         try:
             response = await self._client.post(url, **kwargs)
-            self.rate_limiter.on_response(domain, response.status_code)
+            self._record_response(domain, response)
             return response
         except (httpx.TimeoutException, httpx.ConnectError, httpx.RequestError):
             return None
@@ -78,7 +105,7 @@ class HttpClient:
         await self.rate_limiter.acquire(domain)
         try:
             response = await self._client.request(method, url, **kwargs)
-            self.rate_limiter.on_response(domain, response.status_code)
+            self._record_response(domain, response)
             return response
         except (httpx.TimeoutException, httpx.ConnectError, httpx.RequestError):
             return None

@@ -7,6 +7,8 @@ from enum import Enum
 from datetime import datetime
 from typing import Optional
 
+from core.asset_inventory import Asset
+
 
 class Severity(Enum):
     CRITICAL = "critical"
@@ -19,10 +21,10 @@ class Severity(Enum):
     def score_range(self) -> tuple:
         ranges = {
             "critical": (9.0, 10.0),
-            "high":     (7.0, 8.9),
-            "medium":   (4.0, 6.9),
-            "low":      (1.0, 3.9),
-            "info":     (0.0, 0.9),
+            "high": (7.0, 8.9),
+            "medium": (4.0, 6.9),
+            "low": (1.0, 3.9),
+            "info": (0.0, 0.9),
         }
         return ranges[self.value]
 
@@ -30,10 +32,10 @@ class Severity(Enum):
     def color(self) -> str:
         colors = {
             "critical": "red",
-            "high":     "orange3",
-            "medium":   "yellow",
-            "low":      "blue",
-            "info":     "dim",
+            "high": "orange3",
+            "medium": "yellow",
+            "low": "blue",
+            "info": "dim",
         }
         return colors[self.value]
 
@@ -41,10 +43,10 @@ class Severity(Enum):
     def emoji(self) -> str:
         emojis = {
             "critical": "🔴",
-            "high":     "🟠",
-            "medium":   "🟡",
-            "low":      "🔵",
-            "info":     "⚪",
+            "high": "🟠",
+            "medium": "🟡",
+            "low": "🔵",
+            "info": "⚪",
         }
         return emojis[self.value]
 
@@ -52,34 +54,37 @@ class Severity(Enum):
 def calculate_severity(cvss_score: float) -> Severity:
     if cvss_score >= 9.0:
         return Severity.CRITICAL
-    elif cvss_score >= 7.0:
+    if cvss_score >= 7.0:
         return Severity.HIGH
-    elif cvss_score >= 4.0:
+    if cvss_score >= 4.0:
         return Severity.MEDIUM
-    elif cvss_score >= 1.0:
+    if cvss_score >= 1.0:
         return Severity.LOW
-    else:
-        return Severity.INFO
+    return Severity.INFO
 
 
 @dataclass
 class Vulnerability:
-    vuln_type: str                          # "XSS", "SQLi", "CORS", vs.
-    url: str                                # Tapıldığı URL
+    vuln_type: str
+    url: str
     severity: Severity
     cvss_score: float
     title: str
     description: str
-    evidence: str                           # Nə gördük (response snippet)
-    exploitation: str                       # Necə istismar etmək olar
-    remediation: str                        # Necə düzəltmək olar
-    parameter: Optional[str] = None         # Hansı parameter
+    evidence: str
+    exploitation: str
+    remediation: str
+    parameter: Optional[str] = None
     method: Optional[str] = "GET"
-    payload_used: Optional[str] = None      # Hansı payload işlədi
-    curl_poc: Optional[str] = None          # curl PoC command
-    cwe_id: Optional[str] = None            # CWE-79, CWE-89, vs.
+    payload_used: Optional[str] = None
+    curl_poc: Optional[str] = None
+    cwe_id: Optional[str] = None
     references: list[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=datetime.now)
+    evidence_quality: float = 0.0
+    independent_confirmations: int = 0
+    confidence: float = 0.0
+    verification_status: str = "unverified"
 
     def to_dict(self) -> dict:
         return {
@@ -99,15 +104,19 @@ class Vulnerability:
             "cwe_id": self.cwe_id,
             "references": self.references,
             "timestamp": self.timestamp.isoformat(),
+            "evidence_quality": self.evidence_quality,
+            "independent_confirmations": self.independent_confirmations,
+            "confidence": self.confidence,
+            "verification_status": self.verification_status,
         }
 
 
 @dataclass
 class PortInfo:
     port: int
-    protocol: str           # tcp/udp
-    state: str              # open/closed/filtered
-    service: str            # http, ssh, mysql, vs.
+    protocol: str
+    state: str
+    service: str
     version: Optional[str] = None
     banner: Optional[str] = None
     vulnerabilities: list[Vulnerability] = field(default_factory=list)
@@ -117,7 +126,7 @@ class PortInfo:
 class SubdomainInfo:
     subdomain: str
     ip: Optional[str] = None
-    status: Optional[int] = None        # HTTP status
+    status: Optional[int] = None
     technologies: list[str] = field(default_factory=list)
     open_ports: list[PortInfo] = field(default_factory=list)
     vulnerabilities: list[Vulnerability] = field(default_factory=list)
@@ -128,17 +137,14 @@ class ScanResult:
     target: str
     start_time: datetime = field(default_factory=datetime.now)
     end_time: Optional[datetime] = None
-
-    # Recon nəticələri
+    assets: list[Asset] = field(default_factory=list)
     subdomains: list[SubdomainInfo] = field(default_factory=list)
     technologies: list[str] = field(default_factory=list)
     open_ports: list[PortInfo] = field(default_factory=list)
     endpoints: list[str] = field(default_factory=list)
-
-    # Vulnerability nəticələri
     vulnerabilities: list[Vulnerability] = field(default_factory=list)
+    duplicates_filtered: int = 0
 
-    # Statistika
     @property
     def vuln_count_by_severity(self) -> dict:
         counts = {s.value: 0 for s in Severity}
@@ -148,7 +154,6 @@ class ScanResult:
 
     @property
     def risk_score(self) -> float:
-        """Ümumi risk skoru — weighted average"""
         if not self.vulnerabilities:
             return 0.0
         weights = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
@@ -162,13 +167,25 @@ class ScanResult:
             "start_time": self.start_time.isoformat(),
             "end_time": self.end_time.isoformat() if self.end_time else None,
             "summary": {
+                "assets_found": len(self.assets),
                 "subdomains_found": len(self.subdomains),
                 "open_ports": len(self.open_ports),
                 "endpoints_found": len(self.endpoints),
                 "total_vulnerabilities": len(self.vulnerabilities),
+                "duplicates_filtered": self.duplicates_filtered,
                 "by_severity": self.vuln_count_by_severity,
                 "risk_score": self.risk_score,
             },
+            "assets": [
+                {
+                    "key": asset.key,
+                    "value": asset.value,
+                    "type": asset.asset_type.value,
+                    "sources": list(asset.sources),
+                    "metadata": dict(asset.metadata),
+                }
+                for asset in self.assets
+            ],
             "technologies": self.technologies,
             "subdomains": [
                 {
