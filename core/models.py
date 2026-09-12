@@ -43,12 +43,12 @@ class Vulnerability:
     vuln_type: str
     url: str
     severity: Severity
-    cvss_score: float
-    title: str
-    description: str
-    evidence: str
-    exploitation: str
-    remediation: str
+    cvss_score: float = 0.0
+    title: str = ""
+    description: str = ""
+    evidence: str = ""
+    exploitation: str = ""
+    remediation: str = ""
     parameter: Optional[str] = None
     method: Optional[str] = "GET"
     payload_used: Optional[str] = None
