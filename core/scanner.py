@@ -22,6 +22,7 @@ from core.risk_prioritizer import RiskPrioritizer
 from core.scope import ScopeError, ScopePolicy
 from core.vulnerability_orchestrator import VulnerabilityOrchestrator
 from core.evidence_engine import EvidenceEngine
+from core.adaptive_feedback import AdaptiveFeedbackEngine
 
 from modules.recon.subdomain import SubdomainScanner
 from modules.recon.portscan import PortScanner
@@ -321,7 +322,10 @@ class BugScanner:
                 }
 
                 console.print("\n[bold cyan]🔁 Adaptive endpoint scan...[/bold cyan]")
-                for ep_url in self.orchestrator.prioritize(result.endpoints, limit=15):
+                plans = self.orchestrator.prioritize(result.endpoints, limit=15)
+                for ep_url in AdaptiveFeedbackEngine.prioritize(
+                    plans, result.vulnerabilities, limit=15
+                ):
                     result.vulnerabilities.extend(
                         await self._scan_endpoint_with_plan(ep_url.url, scanners)
                     )
