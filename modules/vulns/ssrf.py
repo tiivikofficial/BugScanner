@@ -11,17 +11,6 @@ from core.models import Vulnerability, Severity
 
 console = Console()
 
-INTERNAL_PATTERNS = [
-    r"169\.254\.\d+\.\d+",
-    r"10\.\d+\.\d+\.\d+",
-    r"172\.(1[6-9]|2\d|3[01])\.\d+\.\d+",
-    r"192\.168\.\d+\.\d+",
-    r"127\.\d+\.\d+\.\d+",
-    r"0\.0\.0\.0",
-    r"::1",
-    r"localhost",
-]
-
 SSRF_PARAM_HINTS = [
     "url", "uri", "link", "src", "source", "href", "redirect",
     "path", "file", "page", "fetch", "load", "proxy", "target",
@@ -29,8 +18,8 @@ SSRF_PARAM_HINTS = [
     "host", "endpoint", "request", "data", "feed", "domain",
 ]
 
-# These are probe values only. A response is reportable only when it contains
-# evidence that the server actually fetched an internal resource.
+# Probe values only. A response is reportable only when it contains
+# resource-specific evidence that the server fetched an internal resource.
 SSRF_PAYLOADS = [
     "http://169.254.169.254/latest/meta-data/",
     "http://169.254.169.254/latest/user-data/",
@@ -48,8 +37,7 @@ SSRF_PAYLOADS = [
 
 AWS_METADATA_INDICATORS = [
     "ami-id", "instance-id", "instance-type",
-    "local-hostname", "public-hostname", "iam",
-    "security-credentials",
+    "local-hostname", "public-hostname", "security-credentials",
 ]
 
 
@@ -72,17 +60,17 @@ class SSRFScanner:
         return urlunparse(parsed._replace(query=urlencode(params, doseq=True)))
 
     def _check_internal_response(self, text: str) -> str | None:
+        """Return only resource-specific indicators, never reflected URL text."""
         lowered = text.lower()
         for indicator in AWS_METADATA_INDICATORS:
-            if indicator in lowered:
-                return f"AWS metadata indicator observed: '{indicator}'"
-        if re.search(r"root:.*:0:0:", text):
+            # Metadata keys must appear as standalone-ish response fields;
+            # merely appearing inside an HTML script or reflected URL is not proof.
+            if re.search(rf"(?m)^\s*{re.escape(indicator)}\s*[:=]", text, re.IGNORECASE):
+                return f"AWS metadata field observed: '{indicator}'"
+        if re.search(r"(?m)^root:.*:0:0:", text):
             return "Linux /etc/passwd content observed"
-        if "for 16-bit app support" in lowered:
+        if "for 16-bit app support" in lowered and "[fonts]" in lowered:
             return "Windows win.ini content observed"
-        for pattern in INTERNAL_PATTERNS:
-            if re.search(pattern, text):
-                return f"Internal resource indicator observed: {pattern}"
         return None
 
     async def _test_param(self, url: str, param: str) -> list[Vulnerability]:
@@ -94,10 +82,8 @@ class SSRFScanner:
                 continue
 
             indicator = self._check_internal_response(response.text)
-
-            # A 200 response, reflected payload, response length, or response
-            # speed is not evidence of server-side fetching. Require an
-            # observable internal-resource indicator before creating a finding.
+            # 200, response length, reflected payload, or response timing are
+            # deliberately insufficient. Require resource-specific evidence.
             if not indicator:
                 continue
 
