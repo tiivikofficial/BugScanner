@@ -19,6 +19,7 @@ from core.waf_detector import WAFDetector
 from core.validator import FalsePositiveValidator
 from core.finding_deduplicator import FindingDeduplicator
 from core.risk_prioritizer import RiskPrioritizer
+from core.scope import ScopeError, ScopePolicy
 
 from modules.recon.subdomain import SubdomainScanner
 from modules.recon.portscan import PortScanner
@@ -62,6 +63,14 @@ class BugScanner:
         self.validate_fp = validate_fp
         self.run_business_logic = run_business_logic
 
+        scope_cfg = self.config.get("scope", {})
+        allowed_targets = scope_cfg.get("allowed_targets", []) or []
+        self.scope_enforced = bool(allowed_targets)
+        self.scope_policy = ScopePolicy.from_strings(
+            allowed_targets,
+            include_subdomains=bool(scope_cfg.get("include_subdomains", False)),
+        )
+
         rl = self.config["rate_limiting"]
         sc = self.config["scanning"]
 
@@ -83,6 +92,26 @@ class BugScanner:
             "proxy":         self.proxy,
         }
 
+    def _scope_allows(self, target: str) -> bool:
+        """Return whether a discovered target is permitted by the configured scope."""
+        if not self.scope_enforced:
+            return True
+        try:
+            self.scope_policy.check(target)
+            return True
+        except ScopeError:
+            return False
+
+    def _require_scope(self, target: str) -> None:
+        """Fail closed before any network activity when the root target is out of scope."""
+        if not self.scope_enforced:
+            return
+        self.scope_policy.check(target)
+
+    def _filter_in_scope_urls(self, urls: list[str]) -> list[str]:
+        """Keep only discovered URLs that remain inside the explicit allowlist."""
+        return [url for url in urls if self._scope_allows(url)]
+
     def _print_banner(self, target: str):
         auth_status = (
             "[green]Authenticated[/green]"
@@ -99,12 +128,18 @@ class BugScanner:
             if self.validate_fp
             else "[dim]OFF[/dim]"
         )
+        scope_status = (
+            "[green]ENFORCED[/green]"
+            if self.scope_enforced
+            else "[dim]DISABLED (backward compatible)[/dim]"
+        )
         console.print(Panel.fit(
             f"[bold cyan]BugScanner[/bold cyan] [dim]v2.0[/dim]\n"
             f"[bold]Target:[/bold]         {target}\n"
             f"[bold]Auth:[/bold]           {auth_status}\n"
             f"[bold]Business Logic:[/bold] {bl_status}\n"
             f"[bold]FP Validation:[/bold]  {fp_status}\n"
+            f"[bold]Scope:[/bold]          {scope_status}\n"
             f"[bold]Proxy:[/bold]          {self.proxy or 'yoxdur'}\n"
             f"[bold]Time:[/bold]           {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             border_style="cyan"
@@ -173,6 +208,8 @@ class BugScanner:
         if modes is None or "all" in modes:
             modes = ["recon", "vulns"]
 
+        # Enforce the root target before WAF detection or any other network request.
+        self._require_scope(target)
         self._print_banner(target)
         result = ScanResult(target=target)
         result.false_positives_filtered = 0
@@ -198,7 +235,13 @@ class BugScanner:
 
                 if not skip_subdomains:
                     sub_scanner = SubdomainScanner(http)
-                    result.subdomains = await sub_scanner.scan(domain)
+                    discovered_subdomains = await sub_scanner.scan(domain)
+                    if self.scope_enforced:
+                        discovered_subdomains = [
+                            sub for sub in discovered_subdomains
+                            if self._scope_allows(f"https://{sub.subdomain}")
+                        ]
+                    result.subdomains = discovered_subdomains
 
                 port_scanner = PortScanner()
                 result.open_ports = await port_scanner.scan(domain, mode=port_mode)
@@ -206,8 +249,10 @@ class BugScanner:
                 console.print("\n[bold cyan]🗂  Endpoint Discovery...[/bold cyan]")
                 disc = DiscoveryScanner(http)
                 endpoints, disc_vulns = await disc.scan(base_url)
-                result.endpoints = endpoints
-                result.vulnerabilities.extend(disc_vulns)
+                result.endpoints = self._filter_in_scope_urls(endpoints)
+                result.vulnerabilities.extend(
+                    vuln for vuln in disc_vulns if self._scope_allows(vuln.url)
+                )
 
             if "vulns" in modes:
                 console.print(Panel("[bold]VULNERABILITY SCAN FAZA[/bold]", border_style="red"))
@@ -251,6 +296,8 @@ class BugScanner:
                 for sub in result.subdomains[:10]:
                     if sub.status and sub.status < 400:
                         sub_url = f"https://{sub.subdomain}"
+                        if not self._scope_allows(sub_url):
+                            continue
                         sub_results = await asyncio.gather(cors.scan(sub_url), disc_sc.scan(sub_url), return_exceptions=True)
                         for r in sub_results:
                             if isinstance(r, list):
@@ -267,6 +314,10 @@ class BugScanner:
                 result.vulnerabilities.extend(await nuclei.scan(base_url))
 
                 if self.validate_fp and result.vulnerabilities:
+                    result.vulnerabilities = [
+                        vuln for vuln in result.vulnerabilities
+                        if self._scope_allows(vuln.url)
+                    ]
                     validator = FalsePositiveValidator(http)
                     confirmed, filtered = await validator.validate_all(result.vulnerabilities)
                     result.vulnerabilities = confirmed
