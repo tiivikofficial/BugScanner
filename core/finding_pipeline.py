@@ -10,33 +10,41 @@ from collections import Counter
 
 from core.finding_deduplicator import FindingDeduplicator
 from core.poc_engine import PoCEngine
+from core.provenance import ProvenanceEngine
 from core.risk_prioritizer import RiskPrioritizer
 from core.verification_engine import VerificationEngine
 from core.models import Vulnerability
 
 
 class FindingPipeline:
-    """Normalize, generate safe reproduction material, verify and prioritize."""
+    """Normalize, attribute, generate safe reproduction material, verify and prioritize."""
 
     @classmethod
     def process(cls, findings: list[Vulnerability]) -> tuple[list[Vulnerability], dict]:
         before = len(findings)
+        findings = ProvenanceEngine.enrich(findings)
         findings = FindingDeduplicator.deduplicate(findings)
         duplicates = before - len(findings)
 
         findings = PoCEngine.enrich(findings)
         findings = VerificationEngine.enrich(findings)
-        findings = PoCEngine.enrich(findings)
         findings = RiskPrioritizer.prioritize(findings)
 
-        return findings, {
+        manifest = {
             "input_findings": before,
             "duplicates_filtered": duplicates,
             "final_findings": len(findings),
             "poc_available": sum(1 for f in findings if f.poc_available),
+            "poc_generated": sum(1 for f in findings if f.poc_status == "generated"),
+            "poc_reproduced": sum(1 for f in findings if f.poc_status == "reproduced"),
+            "impact_confirmed": sum(1 for f in findings if f.impact_status == "confirmed"),
             "verification": dict(Counter(f.verification_status for f in findings)),
             "exploitability": dict(Counter(f.exploitability for f in findings)),
             "impact": dict(Counter(f.impact_status for f in findings)),
             "priority": dict(Counter(f.risk_priority for f in findings)),
             "severity": dict(Counter(f.severity.value for f in findings)),
+            "source_modules": dict(Counter(
+                module for finding in findings for module in finding.source_modules
+            )),
         }
+        return findings, manifest
