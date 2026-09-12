@@ -3,73 +3,77 @@
 ## فارسی
 
 ### خلاصه اجرایی
-BugScanner در مسیر تبدیل‌شدن به یک ابزار حرفه‌ای برای ارزیابی امنیتیِ مجاز قرار دارد. در این مرحله، کنترل نرخ درخواست، واکنش به back-pressure، اعتبارسنجی ورودی، allowlist محدوده، نرمال‌سازی assetها، حذف یافته‌های تکراری و اولویت‌بندی ریسک به هسته اضافه شده‌اند. Scope Guard اکنون قبل از فعالیت شبکه‌ای روی هدف اصلی اعمال می‌شود و assetهای کشف‌شده خارج از محدوده را کنار می‌گذارد.
+BugScanner در مسیر تبدیل‌شدن به یک ابزار حرفه‌ای برای ارزیابی امنیتیِ مجاز قرار دارد. این شاخه شامل adaptive rate limiting، back-pressure handling، input validation، allowlist محدوده، asset normalization، finding deduplication، risk prioritization و evidence/confidence scoring است. Scope Guard قبل از فعالیت شبکه‌ای روی هدف اصلی اعمال می‌شود و assetهای کشف‌شده خارج از محدوده را کنار می‌گذارد.
 
 ### مرحله انجام‌شده فعلی
-**Adaptive Vulnerability Test Planning** به‌عنوان لایه تصمیم‌گیری اضافه شده است. این لایه URLهای موجود را بر اساس مسیر و پارامترهای شناخته‌شده دسته‌بندی می‌کند و تست‌های مرتبط مانند XSS، SQLi، SSRF، Redirect و IDOR را با اولویت مشخص پیشنهاد می‌دهد. هدف، کاهش تست‌های غیرمرتبط و افزایش تمرکز روی attack surface موجود است.
+**Adaptive Feedback Loop** اکنون به runtime اضافه شده است. این لایه از یافته‌های همین اسکن استفاده می‌کند و اگر یک test family با یافته‌ای دارای اعتماد کافی مرتبط باشد، اولویت endpointهای از قبل کشف‌شده و داخل scope را به‌صورت محدود افزایش می‌دهد.
+
+این feedback فقط ترتیب اجرای تست‌های موجود را تغییر می‌دهد؛ هدف جدیدی اضافه نمی‌کند، scope را گسترش نمی‌دهد، payload جدید تولید نمی‌کند و رفتار stealth/bypass ندارد. داده target-specific نیز بین اسکن‌ها ذخیره نمی‌شود.
+
+### زنجیره فعلی
+`Target Validation → Scope Guard → Asset Inventory → Discovery → Context Planner → Adaptive Feedback → Budgeted Tests → FP Validation → Deduplication → Evidence/Confidence → Risk Prioritization → Reporting`
+
+### مرحله قبل
+**Evidence & Confidence Engine** برای هر finding فیلدهای `evidence_quality`، `confidence`، `independent_confirmations` و `verification_status` را محاسبه می‌کند. این metadata قبل از risk prioritization اعمال می‌شود.
 
 ### نکته فنی مهم
-در نسخه فعلی، planner و Scope Guard وجود دارند و تست‌های واحد برای آن‌ها اضافه شده‌اند؛ اما planner هنوز به‌طور کامل جایگزین اجرای مستقیم همه scannerها در orchestration اصلی نشده است. این باید مرحله بعدی باشد تا رفتار adaptive واقعاً در runtime اعمال شود.
+`independent_confirmations` در پیاده‌سازی فعلی هنوز باید دقیق‌تر شود تا فقط تأییدهای واقعاً مستقل را بشمارد؛ در گام بعد بهتر است provenance بر اساس scanner/source/method متمایز شود و صرفاً تعداد رکوردهای تکراری مبنای تأیید نباشد.
 
-### پیشنهادهای فنی اولویت‌دار
-1. **Runtime Orchestration:** خروجی `VulnerabilityOrchestrator` مستقیماً به اجرای scannerها متصل شود؛ فقط تست‌های مرتبط اجرا شوند و fallback امن برای baseline باقی بماند.
-2. **Evidence Engine:** برای هر finding، request/response خلاصه‌شده، status code، headerهای مرتبط، پارامتر، زمان و confidence ذخیره شود؛ بدون ذخیره secrets یا credentialها.
-3. **Finding Confidence:** علاوه بر severity و CVSS، confidence جداگانه تعریف شود تا یافته‌های مشکوک با یافته‌های تأییدشده قاطی نشوند.
-4. **Asset Graph:** رابطه domain → subdomain → endpoint → parameter → finding به‌صورت graph نگهداری شود تا attack surface قابل تحلیل باشد.
-5. **Request Budget:** برای هر asset و هر test family بودجه درخواست مستقل تعریف شود؛ این کار از مصرف بی‌رویه منابع جلوگیری می‌کند.
-6. **Safe Back-pressure:** منطق WAF فعلی که نام `evasion` دارد بازطراحی شود و صرفاً به adaptive throttling، Retry-After و کاهش فشار شبکه محدود بماند.
-7. **Authenticated Roles:** برای محیط‌های مجاز، role/sessionهای تعریف‌شده به‌صورت explicit وارد شوند و مقایسه دسترسی‌ها با diff کنترل‌شده انجام شود.
-8. **Reporting:** گزارش JSON/HTML/PDF با executive summary، scope، coverage، findings، evidence، confidence، remediation و timeline تولید شود.
-9. **CI Quality Gates:** تست واحد، lint، type checking و security regression در GitHub Actions اجرا شوند.
-10. **Configuration Validation:** تنظیمات scope و rate limit در startup schema-validation شوند تا misconfiguration باعث scan ناخواسته نشود.
-
-### معماری پیشنهادی نهایی
-`Target Validation → Scope Guard → Asset Inventory → Discovery → Context Planner → Budgeted Tests → Evidence/Confidence → Deduplication → Risk Prioritization → Reporting`
+### پیشنهادهای فنی بعدی
+1. **Evidence Provenance:** منبع مستقل هر evidence را ثبت و شمارش confirmation را بر اساس source/method متمایز کن.
+2. **Persistent Aggregate Feedback:** پس از provenance، یک پروفایل aggregate و غیرحساس برای نتایج تاریخی اضافه شود؛ بدون URL/secret/credential و بدون امکان override کردن scope.
+3. **Request Budget:** برای هر asset و test family بودجه درخواست مستقل تعریف شود.
+4. **Safe Back-pressure:** منطق WAF با نام `evasion` به adaptive throttling، Retry-After و کاهش فشار شبکه محدود شود.
+5. **Reporting:** گزارش JSON/HTML/PDF با executive summary، scope، coverage، findings، evidence، confidence و remediation تولید شود.
+6. **CI Quality Gates:** unit tests، lint، type checking و security regression در GitHub Actions اجرا شوند.
+7. **Configuration Validation:** scope و rate limit در startup schema-validation شوند.
 
 ### معیارهای موفقیت
-- صفر request خارج از scope در تست‌های regression.
-- کاهش معنی‌دار تست‌های نامرتبط نسبت به اجرای همه scannerها.
+- صفر request خارج از scope در regression.
+- deterministic بودن planner، feedback و risk ranking.
 - هر finding دارای evidence و confidence باشد.
-- deterministic بودن fingerprint و risk ranking.
-- تولید گزارش قابل استفاده برای تیم فنی و مدیر امنیت.
+- feedback فقط روی attack surface از قبل کشف‌شده اثر بگذارد.
+- هیچ داده حساس target در feedback history ذخیره نشود.
 
 ### ملاحظات امنیتی
-این پروژه باید فقط روی دارایی‌هایی اجرا شود که مجوز ارزیابی آن‌ها وجود دارد. Scope Guard باید fail-closed بماند و discovery نباید scope را به‌صورت خودکار گسترش دهد.
+این پروژه باید فقط روی دارایی‌هایی اجرا شود که مجوز ارزیابی آن‌ها وجود دارد. Scope Guard باید fail-closed بماند و discovery یا feedback نباید scope را به‌صورت خودکار گسترش دهد.
 
 ---
 
 ## English
 
 ### Executive Summary
-BugScanner is progressing toward a professional tool for authorized security assessment. The current branch includes adaptive request throttling, back-pressure handling, input validation, explicit scope allowlisting, asset normalization, finding deduplication, and deterministic risk prioritization. Scope Guard now validates the root target before network activity and filters discovered assets outside the configured scope.
+BugScanner is progressing toward a professional tool for authorized security assessment. This branch includes adaptive rate limiting, back-pressure handling, input validation, explicit scope allowlisting, asset normalization, finding deduplication, deterministic risk prioritization, and evidence/confidence scoring.
 
 ### Current Stage
-An **Adaptive Vulnerability Test Planner** has been added. It classifies already-discovered URLs using path and parameter context and proposes relevant checks such as XSS, SQLi, SSRF, Redirect, and IDOR with deterministic priorities. The purpose is to reduce irrelevant testing and focus effort on meaningful attack surface.
+An **Adaptive Feedback Loop** is now integrated into runtime orchestration. It uses findings from the current scan to apply a small, deterministic priority boost when an already-planned test family is supported by a sufficiently trusted finding family.
+
+The feedback loop only reorders existing in-scope work. It does not discover new targets, expand authorization boundaries, generate bypass payloads, or persist target-specific data between scans.
+
+### Current Pipeline
+`Target Validation → Scope Guard → Asset Inventory → Discovery → Context Planner → Adaptive Feedback → Budgeted Tests → FP Validation → Deduplication → Evidence/Confidence → Risk Prioritization → Reporting`
+
+### Previous Stage
+The **Evidence & Confidence Engine** adds `evidence_quality`, `confidence`, `independent_confirmations`, and `verification_status` to findings before risk prioritization.
 
 ### Important Technical Note
-The planner and Scope Guard now exist and have unit-test coverage, but the planner is not yet the sole runtime decision point for scanner execution. The next implementation step should wire the planner into the main orchestration path so adaptive selection actually controls which test families run.
+The current `independent_confirmations` field still needs stronger provenance semantics. The next hardening step should distinguish genuinely independent scanner/source/method evidence from repeated records of the same fingerprint.
 
-### High-value Engineering Recommendations
-1. **Runtime Orchestration:** Connect `VulnerabilityOrchestrator` directly to scanner execution and retain a safe baseline fallback.
-2. **Evidence Engine:** Store concise request/response evidence, status code, relevant headers, parameter, timing, and confidence without retaining secrets or credentials.
-3. **Finding Confidence:** Track confidence independently from severity/CVSS so suspected findings are clearly separated from confirmed findings.
-4. **Asset Graph:** Model domain → subdomain → endpoint → parameter → finding relationships for attack-surface analysis.
-5. **Request Budgets:** Apply per-asset and per-test-family request budgets to prevent uncontrolled resource consumption.
-6. **Safe Back-pressure:** Refactor legacy WAF `evasion` terminology and behavior toward adaptive throttling, Retry-After handling, and respectful network pressure only.
-7. **Authenticated Roles:** For explicitly authorized environments, support declared sessions/roles and controlled authorization-diff testing.
-8. **Professional Reporting:** Produce JSON/HTML/PDF reports containing executive summary, scope, coverage, findings, evidence, confidence, remediation, and timeline.
-9. **CI Quality Gates:** Add unit tests, linting, type checks, and security regression tests to GitHub Actions.
-10. **Configuration Validation:** Validate scope and rate-limit configuration at startup so misconfiguration cannot silently expand scan behavior.
-
-### Recommended Final Architecture
-`Target Validation → Scope Guard → Asset Inventory → Discovery → Context Planner → Budgeted Tests → Evidence/Confidence → Deduplication → Risk Prioritization → Reporting`
+### Recommended Next Steps
+1. **Evidence Provenance:** Track independent evidence sources and base confirmation counts on distinct source/method identities.
+2. **Persistent Aggregate Feedback:** After provenance is hardened, introduce a bounded aggregate historical profile containing no URLs, secrets, credentials, or scope overrides.
+3. **Request Budgets:** Add per-asset and per-test-family request budgets.
+4. **Safe Back-pressure:** Replace legacy WAF `evasion` behavior/terminology with respectful adaptive throttling and Retry-After handling.
+5. **Professional Reporting:** Produce JSON/HTML/PDF reports with scope, coverage, findings, evidence, confidence, and remediation.
+6. **CI Quality Gates:** Add unit tests, linting, type checks, and security regression coverage.
+7. **Configuration Validation:** Validate scope and rate-limit settings at startup.
 
 ### Success Criteria
 - Zero out-of-scope requests in regression tests.
-- Material reduction in irrelevant tests compared with full scanner execution.
+- Deterministic planner, feedback, and risk ranking.
 - Every finding has evidence and confidence metadata.
-- Deterministic finding fingerprints and risk ranking.
-- Reports usable by both engineering and security leadership.
+- Feedback only affects already-discovered attack surface.
+- No sensitive target data is retained in feedback history.
 
 ### Security Considerations
-The project should only be used against assets for which assessment authorization exists. Scope Guard should remain fail-closed, and discovery must never silently expand the configured authorization boundary.
+Use the project only against assets for which assessment authorization exists. Scope Guard must remain fail-closed, and discovery or feedback must never silently expand the authorization boundary.
