@@ -34,8 +34,9 @@ class VerificationEngine:
         if evidence.strip(): signals.append("response-evidence")
         if finding.payload_used: signals.append("controlled-payload")
         if finding.parameter: signals.append("parameter-correlation")
-        if finding.curl_poc: signals.append("reproducible-poc")
-        if finding.exploitation: signals.append("impact-evidence")
+        if finding.poc_available: signals.append("poc-available")
+        if finding.poc_status == "reproduced": signals.append("poc-reproduced")
+        if finding.impact_status == "confirmed": signals.append("observed-impact")
         if finding.references: signals.append("taxonomy-reference")
         if cls._ERROR_MARKERS.search(evidence): signals.append("server-error-correlation")
         return list(dict.fromkeys(signals))
@@ -43,8 +44,7 @@ class VerificationEngine:
     @classmethod
     def verify(cls, finding: Vulnerability, peer_findings: list[Vulnerability] | None = None) -> VerificationResult:
         signals = cls._signals(finding)
-        # Evidence alone is not enough for a verified finding. A finding must
-        # accumulate multiple independent signal classes or corroboration.
+        # Generated PoCs and remediation prose are not treated as reproduced impact.
         score = min(0.80, 0.20 * len(signals))
         peers = peer_findings or []
         corroborating = {
