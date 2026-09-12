@@ -31,7 +31,7 @@
   <table><tr><th>Severity</th><th>Count</th></tr>{% for severity in ['critical','high','medium','low','info'] %}<tr><td>{{ severity|upper }}</td><td>{{ result.vuln_count_by_severity[severity] }}</td></tr>{% endfor %}</table>
 
   <h2>2. Pipeline & Verification Manifest</h2>
-  <div class="notice">The manifest records what the scanner observed versus what it merely generated as verification guidance. Generated material is never presented as proof of exploitation.</div>
+  <div class="notice">The manifest records what the scanner observed versus what it generated as verification guidance. Generated material is never presented as proof of exploitation.</div>
   {% if result.manifest %}<table><tr><th>Manifest Field</th><th>Value</th></tr>{% for key, value in result.manifest.items() %}<tr><td>{{ key }}</td><td><pre>{{ value | safe_code }}</pre></td></tr>{% endfor %}</table>{% else %}<div class="muted">No manifest metadata was recorded.</div>{% endif %}
 
   <h2>3. Assessment Coverage</h2>
@@ -54,7 +54,15 @@
       <div><strong>Source modules:</strong> {{ v.source_modules | join(', ') if v.source_modules else 'not attributed' }}</div>
       {% if v.parameter %}<div><strong>Parameter:</strong> {{ v.parameter }} &nbsp; <strong>Method:</strong> {{ v.method }}</div>{% endif %}{% if v.cwe_id %}<div><strong>CWE:</strong> {{ v.cwe_id }}</div>{% endif %}
 
-      <div class="block"><strong>Observed Evidence</strong><div>{{ v.evidence | safe_text if v.evidence else 'No scanner-observed evidence recorded.' }}</div></div>
+      <div class="block"><strong>Observed Evidence</strong>
+        {% set evidence_lower = (v.evidence or '')[:4000] | lower %}
+        {% if '<!doctype html' in evidence_lower or '<html' in evidence_lower or '<body' in evidence_lower %}
+          <div class="notice">HTML response body detected. The full application/login shell is intentionally omitted. The finding must rely on a specific, redacted security-relevant observation rather than the page source.</div>
+          {% if v.payload_used and v.payload_used in (v.evidence or '') %}<pre>{{ v.payload_used | safe_code }}</pre>{% endif %}
+        {% else %}
+          <div>{{ v.evidence | safe_text if v.evidence else 'No scanner-observed evidence recorded.' }}</div>
+        {% endif %}
+      </div>
 
       <div class="verification">
         <strong>Safe Verification / Exploitability Check</strong>
