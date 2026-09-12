@@ -2,7 +2,8 @@
 
 Deduplication is intentionally conservative: findings are considered the same
 only when their vulnerability type, normalized URL, parameter, and method
-match. Distinct evidence is merged without changing the finding semantics.
+match. Distinct evidence and provenance are merged without changing finding
+semantics.
 """
 
 from __future__ import annotations
@@ -10,10 +11,11 @@ from __future__ import annotations
 from urllib.parse import urlparse, urlunparse
 
 from core.models import Vulnerability
+from core.provenance import ProvenanceEngine
 
 
 class FindingDeduplicator:
-    """Collapse exact logical duplicates while preserving the strongest result."""
+    """Collapse exact logical duplicates while preserving strongest evidence."""
 
     @staticmethod
     def normalize_url(value: str) -> str:
@@ -39,6 +41,7 @@ class FindingDeduplicator:
     def deduplicate(cls, findings: list[Vulnerability]) -> list[Vulnerability]:
         unique: dict[tuple[str, str, str, str], Vulnerability] = {}
         for finding in findings:
+            ProvenanceEngine.enrich([finding])
             key = cls.fingerprint(finding)
             current = unique.get(key)
             if current is None:
@@ -53,5 +56,6 @@ class FindingDeduplicator:
                 extra = other.evidence.strip()
                 if extra not in evidence:
                     winner.evidence = f"{evidence}\n{extra}" if evidence else extra
+            ProvenanceEngine.merge_sources(winner, other)
             unique[key] = winner
         return list(unique.values())
