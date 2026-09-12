@@ -19,12 +19,15 @@ def make_finding(kind="xss"):
     )
 
 
-def test_pipeline_adds_poc_verification_and_priority():
+def test_pipeline_adds_poc_without_claiming_reproduction():
     findings, manifest = FindingPipeline.process([make_finding()])
     assert len(findings) == 1
     finding = findings[0]
     assert finding.poc_available is True
+    assert finding.poc_status == "generated"
     assert finding.curl_poc
+    assert "poc-reproduced" not in finding.evidence
+    assert finding.impact_status == "unconfirmed"
     assert finding.verification_status in {"medium-confidence", "high-confidence", "verified"}
     assert finding.risk_priority in {"P0", "P1", "P2", "P3"}
     assert manifest["final_findings"] == 1
