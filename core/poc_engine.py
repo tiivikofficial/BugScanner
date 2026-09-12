@@ -40,9 +40,8 @@ class PoCEngine:
 
     @staticmethod
     def _evidence_backed(finding: Vulnerability) -> bool:
-        """A generated PoC must be tied to an actual scanner observation."""
-        evidence = (finding.evidence or "").strip().lower()
-        return bool(evidence) and finding.verification_status not in {"unverified", "false-positive"}
+        """Require an observed evidence record, but allow it to remain unverified."""
+        return bool((finding.evidence or "").strip())
 
     @classmethod
     def generate(cls, finding: Vulnerability) -> PoC:
@@ -66,15 +65,12 @@ class PoCEngine:
     @classmethod
     def enrich(cls, findings: list[Vulnerability]) -> list[Vulnerability]:
         for finding in findings:
-            # No evidence => no PoC. This prevents generic curl commands from
-            # making false positives look reproduced or actionable.
             if not cls._evidence_backed(finding):
                 finding.poc_available = False
                 finding.poc_status = "not-generated"
                 finding.curl_poc = None
-                finding.safe_verification = "Not generated: finding lacks sufficient scanner-observed evidence."
+                finding.safe_verification = "Not generated: finding lacks scanner-observed evidence."
                 continue
-
             poc = cls.generate(finding)
             if not finding.curl_poc:
                 finding.curl_poc = poc.curl
