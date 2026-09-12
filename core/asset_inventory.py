@@ -6,7 +6,7 @@ hosts and it never expands the configured scan scope.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from urllib.parse import urlparse, urlunparse
 
@@ -66,7 +66,7 @@ class AssetInventory:
         merged.update(metadata or {})
         asset = Asset(
             key=key,
-            value=cls_value(value, asset_type),
+            value=self._normalize_value(value, asset_type),
             asset_type=asset_type,
             sources=tuple(sorted(sources)),
             metadata=tuple(sorted(merged.items())),
@@ -95,8 +95,8 @@ class AssetInventory:
             for asset in self.all()
         ]
 
-
-def cls_value(value: str, asset_type: AssetType) -> str:
-    if asset_type in {AssetType.URL, AssetType.ENDPOINT}:
-        return AssetInventory.normalize_url(value)
-    return value.strip().lower().rstrip(".")
+    @staticmethod
+    def _normalize_value(value: str, asset_type: AssetType) -> str:
+        if asset_type in {AssetType.URL, AssetType.ENDPOINT}:
+            return AssetInventory.normalize_url(value)
+        return value.strip().lower().rstrip(".")
