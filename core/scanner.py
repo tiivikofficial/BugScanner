@@ -21,6 +21,7 @@ from core.finding_deduplicator import FindingDeduplicator
 from core.risk_prioritizer import RiskPrioritizer
 from core.scope import ScopeError, ScopePolicy
 from core.vulnerability_orchestrator import VulnerabilityOrchestrator
+from core.evidence_engine import EvidenceEngine
 
 from modules.recon.subdomain import SubdomainScanner
 from modules.recon.portscan import PortScanner
@@ -359,6 +360,7 @@ class BugScanner:
         before = len(result.vulnerabilities)
         result.vulnerabilities = FindingDeduplicator.deduplicate(result.vulnerabilities)
         result.duplicates_filtered = before - len(result.vulnerabilities)
+        result.vulnerabilities = EvidenceEngine.enrich(result.vulnerabilities)
         result.vulnerabilities = RiskPrioritizer.prioritize(result.vulnerabilities)
 
         result.end_time = datetime.now()
