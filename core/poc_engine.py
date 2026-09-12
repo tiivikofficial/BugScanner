@@ -1,10 +1,4 @@
-"""Safe proof-of-concept generation for authorized vulnerability reporting.
-
-This module produces non-destructive, human-reviewable reproduction material from
-findings that already exist in the current scan. It never executes exploits,
-performs credential theft, bypasses controls, accesses cloud metadata/internal
-services, or expands scope.
-"""
+"""Safe proof-of-concept generation for authorized vulnerability reporting."""
 
 from __future__ import annotations
 
@@ -23,7 +17,7 @@ class PoC:
 
 
 class PoCEngine:
-    """Build bounded reproduction material for already-detected findings."""
+    """Build bounded reproduction material for findings already supported by evidence."""
 
     _SAFE_MARKER = "BUGSCANNER_POC"
 
@@ -44,34 +38,50 @@ class PoCEngine:
         query = "&".join(f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in pairs)
         return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
 
+    @staticmethod
+    def _evidence_backed(finding: Vulnerability) -> bool:
+        """A generated PoC must be tied to an actual scanner observation."""
+        evidence = (finding.evidence or "").strip().lower()
+        return bool(evidence) and finding.verification_status not in {"unverified", "false-positive"}
+
     @classmethod
     def generate(cls, finding: Vulnerability) -> PoC:
         kind = finding.vuln_type.strip().lower()
         url = finding.url
         marker = cls._SAFE_MARKER
-
         if kind in {"xss", "cross-site scripting"}:
             probe = cls._url_with_parameter(url, finding.parameter, marker)
-            return PoC("XSS reflection PoC", ("Replay the request against the authorized target.", f"Use the benign marker {marker} in the reported parameter.", "Confirm reflection/context using the response body or DOM; do not execute active script."), f'curl -sk -i "{probe}"')
+            return PoC("XSS safe verification", ("Replay only against the authorized target.", f"Place the benign marker {marker} in the reported parameter.", "Confirm reflection/context in the response or DOM; do not execute script."), f'curl -sk -i "{probe}"')
         if kind in {"sqli", "sql injection"}:
             probe = cls._url_with_parameter(url, finding.parameter, marker)
-            return PoC("SQL injection verification PoC", ("Replay the baseline request.", f"Replace only the reported parameter with the benign marker {marker}.", "Compare status, response size, and application error behavior; do not run destructive SQL."), f'curl -sk -i "{probe}"')
+            return PoC("SQL injection safe verification", ("Replay the baseline request.", f"Replace only the reported parameter with the benign marker {marker}.", "Compare status, response size and application error behavior; do not run destructive SQL."), f'curl -sk -i "{probe}"')
         if kind == "ssrf":
-            return PoC("SSRF callback PoC", ("Replay the reported request only on an approved test endpoint.", "Use a collaborator or organization-controlled callback URL for confirmation.", "Confirm the callback event and stop; do not request cloud metadata or internal services."), f'curl -sk -i "{url}"')
-        if kind == "idor":
-            return PoC("IDOR authorization PoC", ("Replay the request with the original authorized test identity.", "Change only the reported object identifier to another test-owned identifier.", "Confirm whether authorization changes while keeping both objects inside the approved test dataset."), f'curl -sk -i "{url}"')
-        return PoC(f"{finding.vuln_type} reproduction PoC", ("Replay the reported request against the authorized target.", "Compare the observed evidence with the finding."), f'curl -sk -i "{url}"')
+            return PoC("SSRF safe callback verification", ("Replay only against an approved test endpoint.", "Use an organization-controlled callback URL.", "Confirm the callback event; do not access metadata or internal services."), f'curl -sk -i "{url}"')
+        if kind in {"idor", "bola"}:
+            return PoC("IDOR authorization verification", ("Replay with the authorized test identity.", "Change only the object identifier to another test-owned object.", "Confirm authorization behavior without accessing another user's data."), f'curl -sk -i "{url}"')
+        if kind in {"information disclosure", "disclosure"}:
+            return PoC("Information disclosure safe verification", ("Replay the request against the authorized target.", "Record HTTP status, content type and response size.", "Inspect only redacted/resource-specific evidence; never copy secrets into the report."), f'curl -sk -i "{url}"')
+        return PoC(f"{finding.vuln_type} safe verification", ("Replay the reported request against the authorized target.", "Compare the observed response with the finding evidence.", "Stop after confirmation; do not perform destructive exploitation."), f'curl -sk -i "{url}"')
 
     @classmethod
     def enrich(cls, findings: list[Vulnerability]) -> list[Vulnerability]:
-        """Attach safe PoCs without claiming that the PoC was executed."""
         for finding in findings:
+            # No evidence => no PoC. This prevents generic curl commands from
+            # making false positives look reproduced or actionable.
+            if not cls._evidence_backed(finding):
+                finding.poc_available = False
+                finding.poc_status = "not-generated"
+                finding.curl_poc = None
+                finding.safe_verification = "Not generated: finding lacks sufficient scanner-observed evidence."
+                continue
+
             poc = cls.generate(finding)
             if not finding.curl_poc:
                 finding.curl_poc = poc.curl
             finding.poc_available = True
             finding.poc_status = "generated"
-            # Keep scanner-observed impact separate from generated reproduction guidance.
-            if not finding.impact_status or finding.impact_status == "unconfirmed":
+            finding.safe_verification = " ".join(poc.steps)
+            finding.verification_observed = False
+            if not finding.impact_status:
                 finding.impact_status = "unconfirmed"
         return findings
