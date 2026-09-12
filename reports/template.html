@@ -7,7 +7,7 @@
   <style>
     * { box-sizing:border-box; } body { background:#0d1117; color:#c9d1d9; font-family:'Segoe UI',Arial,sans-serif; padding:32px; line-height:1.55; }
     h1,h2,h3 { color:#f0f6fc; } h1 { margin-bottom:8px; } h2 { margin-top:30px; border-bottom:1px solid #30363d; padding-bottom:8px; }
-    .muted { color:#8b949e; } .meta,.notice,.stat { background:#161b22; border:1px solid #30363d; border-radius:8px; }
+    .muted { color:#8b949e; } .meta,.notice,.stat,.verification { background:#161b22; border:1px solid #30363d; border-radius:8px; }
     .meta { padding:16px; margin:18px 0; } .meta div { margin:4px 0; } .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:18px 0; }
     .stat { padding:16px; } .stat .num { font-size:26px; font-weight:700; color:#58a6ff; } .stat .lbl { color:#8b949e; font-size:12px; text-transform:uppercase; }
     table { width:100%; border-collapse:collapse; margin-top:12px; } th,td { border:1px solid #30363d; padding:9px; text-align:left; vertical-align:top; } th { background:#161b22; color:#f0f6fc; }
@@ -16,7 +16,7 @@
     .badge { display:inline-block; padding:2px 9px; border-radius:12px; font-size:11px; font-weight:700; margin-right:7px; } .badge.CRITICAL { background:#da3633;color:white; } .badge.HIGH { background:#f85149;color:white; } .badge.MEDIUM { background:#e3b341;color:#111; } .badge.LOW { background:#3fb950;color:#111; } .badge.INFO { background:#58a6ff;color:#111; }
     .confidence { font-weight:700; } .verified { color:#3fb950; } .high-confidence { color:#58a6ff; } .medium-confidence { color:#e3b341; } .low-confidence { color:#f85149; }
     .url { color:#8b949e; word-break:break-all; font-size:13px; margin:5px 0; } .block { margin-top:12px; } pre { background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:12px; white-space:pre-wrap; word-break:break-word; overflow:auto; }
-    details { margin-top:10px; } summary { cursor:pointer; color:#58a6ff; font-weight:600; } .notice { padding:14px; margin:12px 0; } .footer { margin-top:40px; padding-top:16px; border-top:1px solid #30363d; color:#8b949e; font-size:12px; }
+    details { margin-top:10px; } summary { cursor:pointer; color:#58a6ff; font-weight:600; } .notice { padding:14px; margin:12px 0; } .verification { padding:14px; margin-top:12px; } .footer { margin-top:40px; padding-top:16px; border-top:1px solid #30363d; color:#8b949e; font-size:12px; }
   </style>
 </head>
 <body>
@@ -31,7 +31,7 @@
   <table><tr><th>Severity</th><th>Count</th></tr>{% for severity in ['critical','high','medium','low','info'] %}<tr><td>{{ severity|upper }}</td><td>{{ result.vuln_count_by_severity[severity] }}</td></tr>{% endfor %}</table>
 
   <h2>2. Pipeline & Verification Manifest</h2>
-  <div class="notice">The manifest is the machine-readable audit summary for this scan. It records pipeline counts, provenance, verification state, generated PoC state and remediation priority without implying that generated material was executed.</div>
+  <div class="notice">The manifest records what the scanner observed versus what it merely generated as verification guidance. Generated material is never presented as proof of exploitation.</div>
   {% if result.manifest %}<table><tr><th>Manifest Field</th><th>Value</th></tr>{% for key, value in result.manifest.items() %}<tr><td>{{ key }}</td><td><pre>{{ value | safe_code }}</pre></td></tr>{% endfor %}</table>{% else %}<div class="muted">No manifest metadata was recorded.</div>{% endif %}
 
   <h2>3. Assessment Coverage</h2>
@@ -50,13 +50,20 @@
       <div><strong>Type:</strong> {{ v.vuln_type }} &nbsp; <strong>CVSS:</strong> {{ v.cvss_score }} &nbsp; <strong>Priority:</strong> {{ v.risk_priority }}</div>
       <div><strong>Verification:</strong> <span class="confidence {{ v.verification_status }}">{{ v.verification_status }}</span> &nbsp; <strong>Confidence:</strong> {{ "%.0f" | format(v.confidence * 100) }}%</div>
       <div><strong>Evidence quality:</strong> {{ "%.0f" | format(v.evidence_quality * 100) }}% &nbsp; <strong>Independent confirmations:</strong> {{ v.independent_confirmations }}</div>
-      <div><strong>PoC:</strong> {{ v.poc_status }} &nbsp; <strong>Exploitability:</strong> {{ v.exploitability }} &nbsp; <strong>Impact:</strong> {{ v.impact_status }}</div>
+      <div><strong>PoC status:</strong> {{ v.poc_status }} &nbsp; <strong>Exploitability:</strong> {{ v.exploitability }} &nbsp; <strong>Impact:</strong> {{ v.impact_status }}</div>
       <div><strong>Source modules:</strong> {{ v.source_modules | join(', ') if v.source_modules else 'not attributed' }}</div>
       {% if v.parameter %}<div><strong>Parameter:</strong> {{ v.parameter }} &nbsp; <strong>Method:</strong> {{ v.method }}</div>{% endif %}{% if v.cwe_id %}<div><strong>CWE:</strong> {{ v.cwe_id }}</div>{% endif %}
-      <div class="block"><strong>Description / Impact</strong><div>{{ v.description | safe_text }}</div></div>
-      {% if v.evidence %}<details><summary>Evidence</summary><pre>{{ v.evidence | safe_code }}</pre></details>{% endif %}
-      {% if v.curl_poc %}<details><summary>Generated Reproduction Request (cURL)</summary><pre>{{ v.curl_poc | safe_code }}</pre></details>{% endif %}
-      {% if v.payload_used %}<details><summary>Payload Used</summary><pre>{{ v.payload_used | safe_code }}</pre></details>{% endif %}
+
+      <div class="block"><strong>Observed Evidence</strong><div>{{ v.evidence | safe_text if v.evidence else 'No scanner-observed evidence recorded.' }}</div></div>
+
+      <div class="verification">
+        <strong>Safe Verification / Exploitability Check</strong>
+        <div>{{ v.safe_verification | safe_text if v.safe_verification else 'Not generated.' }}</div>
+        <div class="muted"><strong>Observed execution:</strong> {{ 'YES — scanner observed the verification result.' if v.verification_observed else 'NO — this is verification guidance only.' }}</div>
+      </div>
+
+      {% if v.curl_poc %}<details><summary>Safe Reproduction Request (cURL) — generated guidance, not proof</summary><pre>{{ v.curl_poc | safe_code }}</pre></details>{% endif %}
+      {% if v.payload_used %}<details><summary>Payload / Test Marker Used</summary><pre>{{ v.payload_used | safe_code }}</pre></details>{% endif %}
       {% if v.exploitation %}<details><summary>Validation Notes</summary><pre>{{ v.exploitation | safe_code }}</pre></details>{% endif %}
       {% if v.remediation %}<details><summary>Remediation</summary><pre>{{ v.remediation | safe_code }}</pre></details>{% endif %}
       {% if v.references %}<details><summary>References</summary><pre>{% for ref in v.references %}{{ ref }}
@@ -66,7 +73,7 @@
   {% endfor %}{% else %}<div class="notice">No vulnerabilities were retained after validation and deduplication.</div>{% endif %}
 
   <h2>6. Methodology & Confidence</h2>
-  <div class="notice">Generated PoC material is explicitly labeled as <strong>generated</strong> unless scanner-observed evidence marks it as reproduced. Remediation guidance and descriptive exploitation text are not treated as proof of impact. Source modules identify the scanner component that produced or classified the finding. Findings should be manually verified before external disclosure.</div>
+  <div class="notice">A finding is treated as confirmed only when scanner-observed evidence supports the claimed condition. Generated PoC material is reproduction guidance. A reproduced status requires an actual safe verification result and is never inferred from the existence of a cURL command. Sensitive response bodies are not intended to be dumped into this report; disclosure evidence should be redacted and summarized with status, content type and size.</div>
 
   <h2>7. Limitations</h2>
   <ul><li>This report reflects only the assets and endpoints reached during this scan.</li><li>A scanner finding is not, by itself, proof of exploitability or business impact.</li><li>Provenance identifies scanner-source attribution; it is not a claim of independent human confirmation.</li><li>Missing evidence or low confidence should be treated as a verification lead, not a confirmed vulnerability.</li><li>External tools unavailable during the run are not represented as successful tests.</li></ul>
