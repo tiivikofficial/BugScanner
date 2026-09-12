@@ -27,7 +27,11 @@ class ScopePolicy:
         self.rules = tuple(rules or ())
 
     @classmethod
-    def from_strings(cls, values: list[str]) -> "ScopePolicy":
+    def from_strings(
+        cls,
+        values: list[str],
+        include_subdomains: bool = False,
+    ) -> "ScopePolicy":
         rules = []
         for value in values:
             value = value.strip().lower()
@@ -36,7 +40,9 @@ class ScopePolicy:
             if value.startswith("*."):
                 rules.append(ScopeRule(value[2:], include_subdomains=True))
             else:
-                rules.append(ScopeRule(value, include_subdomains=False))
+                rules.append(
+                    ScopeRule(value, include_subdomains=include_subdomains)
+                )
         return cls(rules)
 
     @staticmethod
