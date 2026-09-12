@@ -7,143 +7,77 @@
   <style>
     * { box-sizing: border-box; }
     body { background:#0d1117; color:#c9d1d9; font-family:'Segoe UI',Arial,sans-serif; padding:32px; line-height:1.55; }
-    h1,h2,h3 { color:#f0f6fc; }
-    h1 { margin-bottom:8px; }
-    h2 { margin-top:30px; border-bottom:1px solid #30363d; padding-bottom:8px; }
-    h3 { margin-bottom:8px; }
-    .muted { color:#8b949e; }
-    .meta { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; margin:18px 0; }
-    .meta div { margin:4px 0; }
+    h1,h2,h3 { color:#f0f6fc; } h1 { margin-bottom:8px; } h2 { margin-top:30px; border-bottom:1px solid #30363d; padding-bottom:8px; }
+    h3 { margin-bottom:8px; } .muted { color:#8b949e; } .meta,.notice,.stat { background:#161b22; border:1px solid #30363d; border-radius:8px; }
+    .meta { padding:16px; margin:18px 0; } .meta div { margin:4px 0; }
     .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:18px 0; }
-    .stat { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; }
-    .stat .num { font-size:26px; font-weight:700; color:#58a6ff; }
-    .stat .lbl { color:#8b949e; font-size:12px; text-transform:uppercase; }
-    .section { margin-top:28px; }
-    table { width:100%; border-collapse:collapse; margin-top:12px; }
-    th,td { border:1px solid #30363d; padding:9px; text-align:left; vertical-align:top; }
-    th { background:#161b22; color:#f0f6fc; }
+    .stat { padding:16px; } .stat .num { font-size:26px; font-weight:700; color:#58a6ff; } .stat .lbl { color:#8b949e; font-size:12px; text-transform:uppercase; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; } th,td { border:1px solid #30363d; padding:9px; text-align:left; vertical-align:top; } th { background:#161b22; color:#f0f6fc; }
     .finding { background:#161b22; border:1px solid #30363d; border-left:4px solid #30363d; border-radius:8px; padding:18px; margin:16px 0; }
-    .finding.CRITICAL { border-left-color:#da3633; }
-    .finding.HIGH { border-left-color:#f85149; }
-    .finding.MEDIUM { border-left-color:#e3b341; }
-    .finding.LOW { border-left-color:#3fb950; }
-    .finding.INFO { border-left-color:#58a6ff; }
-    .badge { display:inline-block; padding:2px 9px; border-radius:12px; font-size:11px; font-weight:700; margin-right:7px; }
-    .badge.CRITICAL { background:#da3633; color:white; }
-    .badge.HIGH { background:#f85149; color:white; }
-    .badge.MEDIUM { background:#e3b341; color:#111; }
-    .badge.LOW { background:#3fb950; color:#111; }
-    .badge.INFO { background:#58a6ff; color:#111; }
-    .confidence { font-weight:700; }
-    .verified { color:#3fb950; }
-    .high-confidence { color:#58a6ff; }
-    .medium-confidence { color:#e3b341; }
-    .low-confidence { color:#f85149; }
-    .url { color:#8b949e; word-break:break-all; font-size:13px; margin:5px 0; }
-    .block { margin-top:12px; }
+    .finding.CRITICAL { border-left-color:#da3633; } .finding.HIGH { border-left-color:#f85149; } .finding.MEDIUM { border-left-color:#e3b341; } .finding.LOW { border-left-color:#3fb950; } .finding.INFO { border-left-color:#58a6ff; }
+    .badge { display:inline-block; padding:2px 9px; border-radius:12px; font-size:11px; font-weight:700; margin-right:7px; } .badge.CRITICAL { background:#da3633;color:white; } .badge.HIGH { background:#f85149;color:white; } .badge.MEDIUM { background:#e3b341;color:#111; } .badge.LOW { background:#3fb950;color:#111; } .badge.INFO { background:#58a6ff;color:#111; }
+    .confidence { font-weight:700; } .verified { color:#3fb950; } .high-confidence { color:#58a6ff; } .medium-confidence { color:#e3b341; } .low-confidence { color:#f85149; }
+    .url { color:#8b949e; word-break:break-all; font-size:13px; margin:5px 0; } .block { margin-top:12px; }
     pre { background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:12px; white-space:pre-wrap; word-break:break-word; overflow:auto; }
-    details { margin-top:10px; }
-    summary { cursor:pointer; color:#58a6ff; font-weight:600; }
-    .notice { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:14px; margin:12px 0; }
-    .footer { margin-top:40px; padding-top:16px; border-top:1px solid #30363d; color:#8b949e; font-size:12px; }
+    details { margin-top:10px; } summary { cursor:pointer; color:#58a6ff; font-weight:600; } .notice { padding:14px; margin:12px 0; } .footer { margin-top:40px; padding-top:16px; border-top:1px solid #30363d; color:#8b949e; font-size:12px; }
   </style>
 </head>
 <body>
   <h1>BugScanner — Technical Security Assessment Report</h1>
   <div class="muted">Evidence-backed automated assessment report. Intended for authorized security testing.</div>
-
   <div class="meta">
-    <div><strong>Target:</strong> {{ result.target }}</div>
-    <div><strong>Started:</strong> {{ result.start_time | format_dt }}</div>
-    <div><strong>Finished:</strong> {{ result.end_time | format_dt }}</div>
-    <div><strong>Risk score:</strong> {{ "%.2f" | format(result.risk_score) }}/10</div>
+    <div><strong>Target:</strong> {{ result.target }}</div><div><strong>Started:</strong> {{ result.start_time | format_dt }}</div><div><strong>Finished:</strong> {{ result.end_time | format_dt }}</div><div><strong>Risk score:</strong> {{ "%.2f" | format(result.risk_score) }}/10</div>
   </div>
 
   <h2>1. Executive Summary</h2>
   <div class="grid">
-    <div class="stat"><div class="num">{{ result.vulnerabilities | length }}</div><div class="lbl">Findings</div></div>
-    <div class="stat"><div class="num">{{ result.subdomains | length }}</div><div class="lbl">Subdomains</div></div>
-    <div class="stat"><div class="num">{{ result.open_ports | length }}</div><div class="lbl">Open Ports</div></div>
-    <div class="stat"><div class="num">{{ result.endpoints | length }}</div><div class="lbl">Endpoints</div></div>
-    <div class="stat"><div class="num">{{ result.duplicates_filtered }}</div><div class="lbl">Duplicates Filtered</div></div>
-    <div class="stat"><div class="num">{{ "%.2f" | format(result.risk_score) }}</div><div class="lbl">Risk / 10</div></div>
+    <div class="stat"><div class="num">{{ result.vulnerabilities | length }}</div><div class="lbl">Findings</div></div><div class="stat"><div class="num">{{ result.subdomains | length }}</div><div class="lbl">Subdomains</div></div><div class="stat"><div class="num">{{ result.open_ports | length }}</div><div class="lbl">Open Ports</div></div><div class="stat"><div class="num">{{ result.endpoints | length }}</div><div class="lbl">Endpoints</div></div><div class="stat"><div class="num">{{ result.duplicates_filtered }}</div><div class="lbl">Duplicates Filtered</div></div><div class="stat"><div class="num">{{ "%.2f" | format(result.risk_score) }}</div><div class="lbl">Risk / 10</div></div>
   </div>
+  <table><tr><th>Severity</th><th>Count</th></tr>{% for severity in ['critical','high','medium','low','info'] %}<tr><td>{{ severity|upper }}</td><td>{{ result.vuln_count_by_severity[severity] }}</td></tr>{% endfor %}</table>
 
-  <table>
-    <tr><th>Severity</th><th>Count</th></tr>
-    {% for severity in ['critical','high','medium','low','info'] %}
-    <tr><td>{{ severity|upper }}</td><td>{{ result.vuln_count_by_severity[severity] }}</td></tr>
-    {% endfor %}
+  <h2>2. Pipeline & Verification Manifest</h2>
+  <div class="notice">The manifest is the machine-readable audit summary for this scan. It records pipeline counts, verification state, generated PoC state and remediation priority without implying that generated material was executed.</div>
+  {% if result.manifest %}
+  <table><tr><th>Manifest Field</th><th>Value</th></tr>
+    {% for key, value in result.manifest.items() %}<tr><td>{{ key }}</td><td><pre>{{ value | safe_code }}</pre></td></tr>{% endfor %}
   </table>
+  {% else %}<div class="muted">No manifest metadata was recorded.</div>{% endif %}
 
-  <h2>2. Assessment Coverage</h2>
-  <div class="notice">
-    The report records the assets, technologies, ports, endpoints and findings observed during this scan. Scope enforcement and adaptive orchestration are applied by the scanner before vulnerability results are reported.
-  </div>
-  {% if result.technologies %}
-  <div class="block"><strong>Detected technologies:</strong> {{ result.technologies | join(', ') }}</div>
-  {% endif %}
+  <h2>3. Assessment Coverage</h2>
+  <div class="notice">The report records the assets, technologies, ports, endpoints and findings observed during this scan. Scope enforcement and adaptive orchestration are applied by the scanner before vulnerability results are reported.</div>
+  {% if result.technologies %}<div class="block"><strong>Detected technologies:</strong> {{ result.technologies | join(', ') }}</div>{% endif %}
 
-  <h2>3. Discovered Assets</h2>
-  {% if result.subdomains %}
-  <table>
-    <tr><th>Host</th><th>IP</th><th>HTTP Status</th><th>Technologies</th></tr>
-    {% for s in result.subdomains %}
-    <tr><td>{{ s.subdomain }}</td><td>{{ s.ip or '—' }}</td><td>{{ s.status or '—' }}</td><td>{{ s.technologies | join(', ') if s.technologies else '—' }}</td></tr>
-    {% endfor %}
-  </table>
-  {% else %}<div class="muted">No subdomains were recorded.</div>{% endif %}
+  <h2>4. Discovered Assets</h2>
+  {% if result.subdomains %}<table><tr><th>Host</th><th>IP</th><th>HTTP Status</th><th>Technologies</th></tr>{% for s in result.subdomains %}<tr><td>{{ s.subdomain }}</td><td>{{ s.ip or '—' }}</td><td>{{ s.status or '—' }}</td><td>{{ s.technologies | join(', ') if s.technologies else '—' }}</td></tr>{% endfor %}</table>{% else %}<div class="muted">No subdomains were recorded.</div>{% endif %}
+  {% if result.open_ports %}<h3>Open Ports</h3><table><tr><th>Port</th><th>Protocol</th><th>State</th><th>Service</th><th>Version</th></tr>{% for p in result.open_ports %}<tr><td>{{ p.port }}</td><td>{{ p.protocol }}</td><td>{{ p.state }}</td><td>{{ p.service }}</td><td>{{ p.version or '—' }}</td></tr>{% endfor %}</table>{% endif %}
 
-  {% if result.open_ports %}
-  <h3>Open Ports</h3>
-  <table>
-    <tr><th>Port</th><th>Protocol</th><th>State</th><th>Service</th><th>Version</th></tr>
-    {% for p in result.open_ports %}
-    <tr><td>{{ p.port }}</td><td>{{ p.protocol }}</td><td>{{ p.state }}</td><td>{{ p.service }}</td><td>{{ p.version or '—' }}</td></tr>
-    {% endfor %}
-  </table>
-  {% endif %}
-
-  <h2>4. Findings — Technical Details</h2>
-  {% if result.vulnerabilities %}
-    {% for v in result.vulnerabilities %}
+  <h2>5. Findings — Technical Details</h2>
+  {% if result.vulnerabilities %}{% for v in result.vulnerabilities %}
     <div class="finding {{ v.severity.name }}">
       <h3><span class="badge {{ v.severity.name }}">{{ v.severity.name }}</span>{{ v.title }}</h3>
       <div class="url"><strong>URL:</strong> {{ v.url }}</div>
-      <div><strong>Type:</strong> {{ v.vuln_type }} &nbsp; <strong>CVSS:</strong> {{ v.cvss_score }}</div>
+      <div><strong>Type:</strong> {{ v.vuln_type }} &nbsp; <strong>CVSS:</strong> {{ v.cvss_score }} &nbsp; <strong>Priority:</strong> {{ v.risk_priority }}</div>
       <div><strong>Verification:</strong> <span class="confidence {{ v.verification_status }}">{{ v.verification_status }}</span> &nbsp; <strong>Confidence:</strong> {{ "%.0f" | format(v.confidence * 100) }}%</div>
       <div><strong>Evidence quality:</strong> {{ "%.0f" | format(v.evidence_quality * 100) }}% &nbsp; <strong>Independent confirmations:</strong> {{ v.independent_confirmations }}</div>
-      {% if v.parameter %}<div><strong>Parameter:</strong> {{ v.parameter }} &nbsp; <strong>Method:</strong> {{ v.method }}</div>{% endif %}
-      {% if v.cwe_id %}<div><strong>CWE:</strong> {{ v.cwe_id }}</div>{% endif %}
-
+      <div><strong>PoC:</strong> {{ v.poc_status }} &nbsp; <strong>Exploitability:</strong> {{ v.exploitability }} &nbsp; <strong>Impact:</strong> {{ v.impact_status }}</div>
+      {% if v.parameter %}<div><strong>Parameter:</strong> {{ v.parameter }} &nbsp; <strong>Method:</strong> {{ v.method }}</div>{% endif %}{% if v.cwe_id %}<div><strong>CWE:</strong> {{ v.cwe_id }}</div>{% endif %}
       <div class="block"><strong>Description / Impact</strong><div>{{ v.description | safe_text }}</div></div>
       {% if v.evidence %}<details><summary>Evidence</summary><pre>{{ v.evidence | safe_code }}</pre></details>{% endif %}
-      {% if v.exploitation %}<details><summary>Validation / PoC Details</summary><pre>{{ v.exploitation | safe_code }}</pre></details>{% endif %}
+      {% if v.curl_poc %}<details><summary>Generated Reproduction Request (cURL)</summary><pre>{{ v.curl_poc | safe_code }}</pre></details>{% endif %}
       {% if v.payload_used %}<details><summary>Payload Used</summary><pre>{{ v.payload_used | safe_code }}</pre></details>{% endif %}
-      {% if v.curl_poc %}<details><summary>Reproduction Request (cURL)</summary><pre>{{ v.curl_poc | safe_code }}</pre></details>{% endif %}
+      {% if v.exploitation %}<details><summary>Validation Notes</summary><pre>{{ v.exploitation | safe_code }}</pre></details>{% endif %}
       {% if v.remediation %}<details><summary>Remediation</summary><pre>{{ v.remediation | safe_code }}</pre></details>{% endif %}
       {% if v.references %}<details><summary>References</summary><pre>{% for ref in v.references %}{{ ref }}
 {% endfor %}</pre></details>{% endif %}
       <div class="muted block">Finding timestamp: {{ v.timestamp | format_dt }}</div>
     </div>
-    {% endfor %}
-  {% else %}
-    <div class="notice">No vulnerabilities were retained after validation and deduplication.</div>
-  {% endif %}
+  {% endfor %}{% else %}<div class="notice">No vulnerabilities were retained after validation and deduplication.</div>{% endif %}
 
-  <h2>5. Methodology & Confidence</h2>
-  <div class="notice">
-    Findings are deduplicated and enriched with deterministic evidence/confidence metadata before risk prioritization. Confidence is based on collected evidence, payload presence, reproduction material, exploitation evidence, parameter context, references and confirmation count. Automated findings should be manually verified before external disclosure.
-  </div>
+  <h2>6. Methodology & Confidence</h2>
+  <div class="notice">Generated PoC material is explicitly labeled as <strong>generated</strong> unless scanner-observed evidence marks it as reproduced. Remediation guidance and descriptive exploitation text are not treated as proof of impact. Findings should be manually verified before external disclosure.</div>
 
-  <h2>6. Limitations</h2>
-  <ul>
-    <li>This report reflects only the assets and endpoints reached during this scan.</li>
-    <li>A scanner finding is not, by itself, proof of exploitability or business impact.</li>
-    <li>Missing evidence or low confidence should be treated as a verification lead, not a confirmed vulnerability.</li>
-    <li>External tools that were unavailable during the run are not represented as successful tests.</li>
-  </ul>
-
+  <h2>7. Limitations</h2>
+  <ul><li>This report reflects only the assets and endpoints reached during this scan.</li><li>A scanner finding is not, by itself, proof of exploitability or business impact.</li><li>Missing evidence or low confidence should be treated as a verification lead, not a confirmed vulnerability.</li><li>External tools unavailable during the run are not represented as successful tests.</li></ul>
   <div class="footer">BugScanner technical report — generated automatically. Use only for authorized security assessment and remediation workflows.</div>
 </body>
 </html>
