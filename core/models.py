@@ -64,11 +64,13 @@ class Vulnerability:
     impact_status: str = "unconfirmed"
     poc_available: bool = False
     poc_status: str = "not-generated"
+    safe_verification: str = ""
+    verification_observed: bool = False
     risk_priority: str = "P3"
     source_modules: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
-        return {"vuln_type": self.vuln_type, "url": self.url, "severity": self.severity.value, "cvss_score": self.cvss_score, "title": self.title, "description": self.description, "evidence": self.evidence, "exploitation": self.exploitation, "remediation": self.remediation, "parameter": self.parameter, "method": self.method, "payload_used": self.payload_used, "curl_poc": self.curl_poc, "cwe_id": self.cwe_id, "references": self.references, "timestamp": self.timestamp.isoformat(), "evidence_quality": self.evidence_quality, "independent_confirmations": self.independent_confirmations, "confidence": self.confidence, "verification_status": self.verification_status, "exploitability": self.exploitability, "impact_status": self.impact_status, "poc_available": self.poc_available, "poc_status": self.poc_status, "risk_priority": self.risk_priority, "source_modules": self.source_modules}
+        return {"vuln_type": self.vuln_type, "url": self.url, "severity": self.severity.value, "cvss_score": self.cvss_score, "title": self.title, "description": self.description, "evidence": self.evidence, "exploitation": self.exploitation, "remediation": self.remediation, "parameter": self.parameter, "method": self.method, "payload_used": self.payload_used, "curl_poc": self.curl_poc, "cwe_id": self.cwe_id, "references": self.references, "timestamp": self.timestamp.isoformat(), "evidence_quality": self.evidence_quality, "independent_confirmations": self.independent_confirmations, "confidence": self.confidence, "verification_status": self.verification_status, "exploitability": self.exploitability, "impact_status": self.impact_status, "poc_available": self.poc_available, "poc_status": self.poc_status, "safe_verification": self.safe_verification, "verification_observed": self.verification_observed, "risk_priority": self.risk_priority, "source_modules": self.source_modules}
 
 
 @dataclass
