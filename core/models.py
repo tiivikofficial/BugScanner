@@ -81,6 +81,10 @@ class Vulnerability:
     cwe_id: Optional[str] = None
     references: list[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=datetime.now)
+    evidence_quality: float = 0.0
+    independent_confirmations: int = 0
+    confidence: float = 0.0
+    verification_status: str = "unverified"
 
     def to_dict(self) -> dict:
         return {
@@ -100,6 +104,10 @@ class Vulnerability:
             "cwe_id": self.cwe_id,
             "references": self.references,
             "timestamp": self.timestamp.isoformat(),
+            "evidence_quality": self.evidence_quality,
+            "independent_confirmations": self.independent_confirmations,
+            "confidence": self.confidence,
+            "verification_status": self.verification_status,
         }
 
 
