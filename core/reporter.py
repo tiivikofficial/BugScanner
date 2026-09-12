@@ -2,20 +2,37 @@
 Reporter — JSON və HTML report generasiyası
 """
 
-import json
 import asyncio
-import aiofiles
-from pathlib import Path
+import hashlib
+import json
+import re
 from datetime import datetime
+from pathlib import Path
+
+import aiofiles
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 from markupsafe import Markup, escape
 from rich.console import Console
+
 from core.models import ScanResult
 
 console = Console()
 
 TEMPLATE_DIR = Path(__file__).parent.parent / "reports"
 REPORTS_DIR = Path("./reports")
+
+# Windows forbids these characters in file/directory names. Keeping the list
+# platform-independent also makes generated report names portable.
+_INVALID_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_RESERVED_WINDOWS_NAMES = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
+_MAX_FILENAME_STEM = 140
 
 
 def format_dt(dt) -> str:
@@ -30,7 +47,7 @@ def safe_text(value) -> Markup:
     """HTML escape et amma newline-ları <br>-ə çevir"""
     if value is None:
         return Markup("")
-    return Markup(str(escape(str(value))).replace('\n', '<br>'))
+    return Markup(str(escape(str(value))).replace("\n", "<br>"))
 
 
 def safe_code(value) -> Markup:
@@ -38,6 +55,33 @@ def safe_code(value) -> Markup:
     if value is None:
         return Markup("")
     return Markup(str(escape(str(value))))
+
+
+def _safe_filename_stem(value: str) -> str:
+    """Return a filesystem-safe, deterministic filename stem.
+
+    URLs frequently contain query strings such as ``?ReturnUrl=...`` and
+    percent-encoded characters. Windows rejects several of those characters
+    (notably ``?`` and ``:``), so report generation must never use a raw URL as
+    a filename. Reserved device names and trailing dots/spaces are handled as
+    well. A short hash is appended when truncation is required to avoid losing
+    uniqueness between long targets.
+    """
+    raw = str(value or "target").strip()
+    raw = re.sub(r"^https?://", "", raw, flags=re.IGNORECASE)
+    raw = _INVALID_FILENAME_CHARS.sub("_", raw)
+    raw = re.sub(r"_+", "_", raw)
+    raw = raw.strip(" ._") or "target"
+
+    # Windows treats CON, NUL, COM1, etc. as reserved even with an extension.
+    if raw.upper().split(".", 1)[0] in _RESERVED_WINDOWS_NAMES:
+        raw = f"target_{raw}"
+
+    if len(raw) > _MAX_FILENAME_STEM:
+        digest = hashlib.sha256(str(value).encode("utf-8", errors="replace")).hexdigest()[:10]
+        raw = f"{raw[:_MAX_FILENAME_STEM - 11].rstrip(' ._')}_{digest}"
+
+    return raw
 
 
 class Reporter:
@@ -55,11 +99,7 @@ class Reporter:
         self.jinja.globals["Markup"] = Markup
 
     def _filename_base(self, target: str) -> str:
-        safe = (target
-                .replace("https://", "")
-                .replace("http://", "")
-                .replace("/", "_")
-                .replace(":", "_"))
+        safe = _safe_filename_stem(target)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"{safe}_{ts}"
 
