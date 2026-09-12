@@ -20,6 +20,7 @@ from core.validator import FalsePositiveValidator
 from core.finding_deduplicator import FindingDeduplicator
 from core.risk_prioritizer import RiskPrioritizer
 from core.scope import ScopeError, ScopePolicy
+from core.vulnerability_orchestrator import VulnerabilityOrchestrator
 
 from modules.recon.subdomain import SubdomainScanner
 from modules.recon.portscan import PortScanner
@@ -62,6 +63,7 @@ class BugScanner:
         self.proxy = proxy
         self.validate_fp = validate_fp
         self.run_business_logic = run_business_logic
+        self.orchestrator = VulnerabilityOrchestrator()
 
         scope_cfg = self.config.get("scope", {})
         allowed_targets = scope_cfg.get("allowed_targets", []) or []
@@ -111,6 +113,30 @@ class BugScanner:
     def _filter_in_scope_urls(self, urls: list[str]) -> list[str]:
         """Keep only discovered URLs that remain inside the explicit allowlist."""
         return [url for url in urls if self._scope_allows(url)]
+
+    async def _scan_endpoint_with_plan(self, ep_url: str, scanners: dict) -> list:
+        """Run only the checks selected for an already-discovered endpoint."""
+        plan = self.orchestrator.plan(ep_url)
+        selected = [
+            scanners[name].scan(ep_url)
+            for name in plan.tests
+            if name in scanners
+        ]
+
+        console.print(
+            f"  [dim]{ep_url} → {', '.join(plan.tests)} "
+            f"(priority={plan.priority})[/dim]"
+        )
+
+        if not selected:
+            return []
+
+        results = await asyncio.gather(*selected, return_exceptions=True)
+        findings = []
+        for item in results:
+            if isinstance(item, list):
+                findings.extend(item)
+        return findings
 
     def _print_banner(self, target: str):
         auth_status = (
@@ -283,14 +309,21 @@ class BugScanner:
                 console.print("\n[bold cyan]🆔 IDOR...[/bold cyan]")
                 result.vulnerabilities.extend(await idor.scan(base_url))
 
-                console.print("\n[bold cyan]🔁 Endpoint scan...[/bold cyan]")
-                for ep_url in result.endpoints[:15]:
-                    ep_results = await asyncio.gather(
-                        xss.scan(ep_url), sqli.scan(ep_url), cors.scan(ep_url), idor.scan(ep_url), return_exceptions=True
+                scanners = {
+                    "xss": xss,
+                    "sqli": sqli,
+                    "cors": cors,
+                    "ssrf": ssrf,
+                    "redirect": redirect,
+                    "idor": idor,
+                    "disclosure": disc_sc,
+                }
+
+                console.print("\n[bold cyan]🔁 Adaptive endpoint scan...[/bold cyan]")
+                for ep_url in self.orchestrator.prioritize(result.endpoints, limit=15):
+                    result.vulnerabilities.extend(
+                        await self._scan_endpoint_with_plan(ep_url.url, scanners)
                     )
-                    for r in ep_results:
-                        if isinstance(r, list):
-                            result.vulnerabilities.extend(r)
 
                 console.print("\n[bold cyan]🌐 Subdomain vuln scan...[/bold cyan]")
                 for sub in result.subdomains[:10]:
